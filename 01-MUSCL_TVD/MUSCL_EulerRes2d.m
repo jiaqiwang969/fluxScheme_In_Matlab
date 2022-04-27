@@ -95,6 +95,8 @@ function [res] = MUSCL_EulerRes2d(q,smax,gamma,dx,dy,N,M,limiter,fluxMethod)
                     flux = HLLEflux(qxL,qxR,gamma,[1,0]);   % F_{i,j+1/2}
                	case 'HLLC' % HLLC flux
                     flux = HLLCflux(qxL,qxR,gamma,[1,0]);	% F_{i,j+1/2}
+                case 'AUSMPlusUp' % AUSMPlusUp flux
+                    flux = AUSMPlusUpflux(qxL,qxR,gamma,[1,0]);	% F_{i,j+1/2}
                 otherwise
                     error('flux option not available')
             end
@@ -122,6 +124,8 @@ function [res] = MUSCL_EulerRes2d(q,smax,gamma,dx,dy,N,M,limiter,fluxMethod)
                     flux = HLLEflux(qyL,qyR,gamma,[0,1]);	% F_{i+1/2,j}
                 case 'HLLC' % HLLC flux
                     flux = HLLCflux(qyL,qyR,gamma,[0,1]);	% F_{i+1/2,j}
+                case 'AUSMPlusUp' % AUSMPlusUp flux
+                    flux = AUSMPlusUpflux(qyL,qyR,gamma,[0,1]);	% F_{i+1/2,j}
                 otherwise
                     error('flux option not available')
             end
@@ -149,6 +153,8 @@ function [res] = MUSCL_EulerRes2d(q,smax,gamma,dx,dy,N,M,limiter,fluxMethod)
                 flux = HLLEflux(qL,qR,gamma,[0,1]);     % F_{i+1/2,j}
           	case 'HLLC' % HLLC flux
                 flux = HLLCflux(qL,qR,gamma,[0,1]);     % F_{i+1/2,j}
+            case 'AUSMPlusUp' % HLLC flux
+                flux = AUSMPlusUpflux(qL,qR,gamma,[0,1]);     % F_{i+1/2,j}
         end
         cell(M-1,j).res = cell(M-1,j).res + flux/dy;
     end
@@ -167,6 +173,8 @@ function [res] = MUSCL_EulerRes2d(q,smax,gamma,dx,dy,N,M,limiter,fluxMethod)
                 flux = HLLEflux(qL,qR,gamma,[1,0]);     % F_{i,j+1/2}
           	case 'HLLC' % HLLC flux
                 flux = HLLCflux(qL,qR,gamma,[1,0]);     % F_{i,j+1/2}
+            case 'AUSMPlusUp' % HLLC flux
+                flux = AUSMPlusUpflux(qL,qR,gamma,[1,0]);     % F_{i,j+1/2}
         end
         cell(i,N-1).res = cell(i,N-1).res + flux/dx;
     end
@@ -185,6 +193,8 @@ function [res] = MUSCL_EulerRes2d(q,smax,gamma,dx,dy,N,M,limiter,fluxMethod)
                 flux = HLLEflux(qL,qR,gamma,[0,-1]);    % F_{i-1/2,j}
            	case 'HLLC' % HLLC flux
                 flux = HLLCflux(qL,qR,gamma,[0,-1]);    % F_{i-1/2,j}
+            case 'AUSMPlusUp' % AUSMPlusUp flux
+                flux = AUSMPlusUpflux(qL,qR,gamma,[0,-1]);    % F_{i-1/2,j}
         end
         cell(2,j).res = cell(2,j).res + flux/dy;
     end
@@ -203,12 +213,14 @@ function [res] = MUSCL_EulerRes2d(q,smax,gamma,dx,dy,N,M,limiter,fluxMethod)
                 flux = HLLEflux(qL,qR,gamma,[-1,0]);	% F_{i,j-1/2}
           	case 'HLLC' % HLLC flux
                 flux = HLLCflux(qL,qR,gamma,[-1,0]);	% F_{i,j-1/2}
+            case 'AUSMPlusUp' % AUSMPlusUp flux
+                flux = AUSMPlusUpflux(qL,qR,gamma,[-1,0]);	% F_{i,j-1/2}
         end
         cell(i,2).res = cell(i,2).res + flux/dx;
     end
     
     % Prepare residual as layers: [rho, rho*u, rho*v, rho*E]
-    parfor i = 1:M
+    for i = 1:M %par
         for j = 1:N
             res(i,j,:) = cell(i,j).res;
         end
@@ -490,3 +502,102 @@ function HLLC = HLLCflux(qL,qR,gamma,normal)
         HLLC = FR;
     end
 end
+
+function AUSMPlusUP = AUSMPlusUpflux(ql,qr,gamma,normal)
+    sigma = 1.0;
+    kp    = 0.25;
+    ku    = 0.75;
+    minf  = 0.5;
+    % normal vectors
+    nx = normal(1);
+    ny = normal(2);
+    
+    % Left state
+    rl = ql(1);
+    ul = ql(2)/rl;
+    vl = ql(3)/rl;
+    vnl = ul*nx+vl*ny;
+    pl = (gamma-1)*( ql(4) - rl*(ul^2+vl^2)/2 );
+    hl = ( ql(4) + pl ) / rl;
+    
+    % Right state
+    rr = qr(1);
+    ur = qr(2)/rr;
+    vr = qr(3)/rr;
+    vnr = ur*nx+vr*ny;
+    pr = (gamma-1)*( qr(4) - rr*(ur^2+vr^2)/2 );
+    hr = ( qr(4) + pr ) / rr;
+
+% compute interface speed of sound ----------------------------------------
+astarsqrl = 2. * hl * (gamma-1.) / (gamma+1.);  % (29) [L06]
+astarsqrr = 2. * hr * (gamma-1.) / (gamma+1.);
+astarl = sqrt( astarsqrl );  % (28) [L06]
+astarr = sqrt( astarsqrr );
+ahatl = astarsqrl / (max( astarl, abs( vnl ) ) ); % (28) [L06]
+ahatr = astarsqrr / (max( astarr, abs( vnr ) ) );
+af = min( ahatl,ahatr); % (28) [L06]  
+
+  % --------------- compute interface Mach number ---------------
+  ml   = vnl / af;
+  mla = abs(ml);
+  mr = vnr / af;
+  mra = abs(mr);
+  
+  mbarsq = 0.5*(ml*ml + mr*mr);
+  mmax   = max(mbarsq,minf*minf);
+  mosq   = min(1.0,mmax);
+  mo     = mosq^0.5;
+  
+  fa   = mo*(2.0-mo);
+  alpha = 0.1875*(5*fa*fa-4);
+  
+  if ( mla <= 1.0 )
+      mlp = 0.25*(ml+1.0)*(ml+1.0) ...
+          + 0.125*(ml*ml-1.0)*(ml*ml-1.0);
+      wtl = 0.25*(ml+1.0)*(ml+1.0)*(2.0-ml) ...
+          + alpha*ml*(ml*ml-1.0)*(ml*ml-1.0);
+  else
+      mlp = 0.5*(ml+mla);
+      wtl = 0.5*(1.0+ml/mla);
+  end
+  
+  if ( mra <= 1.0 )
+      mrm = -0.25*(mr-1.0)*(mr-1.0) ...
+          -0.125*(mr*mr-1.0)*(mr*mr-1.0);
+      wtr = 0.25*(mr-1.0)*(mr-1.0)*(2.0+mr) ...
+          - alpha*mr*(mr*mr-1.0)*(mr*mr-1.0);
+  else
+      mrm = 0.5*(mr-mra);
+      wtr = 0.5*(1.0-mr/mra);
+  end
+  
+  rf  = 0.5*( rl + rr );
+  
+  
+  sigmabar = 1.0-sigma*mbarsq;
+  mp  = ( -kp * max(sigmabar,0.0)*(pr-pl) )/( fa*rf*af*af );
+  pu  = -ku * wtl * wtr * fa * af * (rl+rr) * (vnr-vnl);
+  
+  mf  = mlp + mrm + mp;
+  
+  mfa = abs(mf);
+  mfp = 0.5*(mf+mfa);
+  mfm = 0.5*(mf-mfa);
+  
+  pf = wtl*pl + wtr*pr + pu;
+
+  % --------------- compute flux ---------------
+
+  F(1,1)  = (mfp*rl     + mfm*rr     )*af;
+  F(2,1)  = (mfp*rl*ul + mfm*rr*ur )*af + pf*nx;
+  F(3,1)  = (mfp*rl*vl + mfm*rr*vr )*af + pf*ny;
+  F(4,1)  = (mfp*rl*hl + mfm*rr*hr )*af;
+   
+  AUSMPlusUP = F;
+end
+
+
+
+
+
+

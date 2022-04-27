@@ -24,18 +24,19 @@
 %   Numerical Methods for Partial Differential Equations 18.5 (2002): 584-608. 
 %
 % coded by Manuel Diaz, 2015.05.10
+% modified by Jiaqi Wang, 2020.04.27-add AUSMPlusUpflux
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 clear; close all; clc;
 
 %% Parameters
 CFL     = 0.50;     % CFL number;
 tEnd    = 0.25;     % Final time;
-nx      = 339;      % Number of cells/Elements in x;
-ny      = 339;      % Number of cells/Elements in y;
+nx      = 399;      % Number of cells/Elements in x;
+ny      = 399;      % Number of cells/Elements in y;
 n       = 05;        % Degrees of freedom: ideal air=5, monoatomic gas=3;
 IC      = 06;       % 19 IC cases are available;
-fluxMth ='HLLC';	% LF, RUS, ROE, HLLE, HLLC;
-limiter ='MC';      % MM, MC, VA, VL;
+fluxMth ='AUSMPlusUp';	% LF, RUS, ROE, HLLE, HLLC,AUSMPlusUpflux;
+limiter ='VA';      % MM, MC, VA, VL,;
 plot_fig= 1;        % 1:visualize evolution;
 
 % Ratio of specific heats for ideal di-atomic gas

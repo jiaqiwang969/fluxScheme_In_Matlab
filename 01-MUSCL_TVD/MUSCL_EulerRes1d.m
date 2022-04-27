@@ -312,7 +312,7 @@ end
 
 
 
-function AUSMPlusUP = AUSMPlusUpflux(qL,qR,gamma)
+function AUSMPlusUP = AUSMPlusUpflux(ql,qr,gamma)
 % AUSM numerical flux
 %
 % Implementation of AUSM+
@@ -326,14 +326,14 @@ ku    = 0.75;
 minf = 0.5;
 
 % Left/Right state
-rl = qL(1);
-ul = qL(2)./qL(1);
-pl = (gamma-1)*( qL(3) - rl*ul*ul/2 );
-hl = ( qL(3) + pl )./ rl;
-rr = qR(1);
-ur = qR(2)./qR(1);
-pr = (gamma-1)*( qR(3) - rr*ur*ur/2 );
-hr = ( qR(3) + pr )./ rr;
+rl = ql(1);
+ul = ql(2)./ql(1);
+pl = (gamma-1)*( ql(3) - rl*ul*ul/2 );
+hl = ( ql(3) + pl )./ rl;
+rr = qr(1);
+ur = qr(2)./qr(1);
+pr = (gamma-1)*( qr(3) - rr*ur*ur/2 );
+hr = ( qr(3) + pr )./ rr;
 
 % compute interface speed of sound ----------------------------------------
 astarsqrl = 2. * hl * (gamma-1.) / (gamma+1.);  % (29) [L06]
@@ -342,7 +342,7 @@ astarl = sqrt( astarsqrl );  % (28) [L06]
 astarr = sqrt( astarsqrr );
 ahatl = astarsqrl / (max( astarl, abs( ul ) ) ); % (28) [L06]
 ahatr = astarsqrr / (max( astarr, abs( ur ) ) );
-af = 1/2*( ahatl+ahatr); % (28) [L06]
+af = min( ahatl,ahatr); % (28) [L06]
 
 % compute interface Mach number -------------
 ml   = ul / af;
